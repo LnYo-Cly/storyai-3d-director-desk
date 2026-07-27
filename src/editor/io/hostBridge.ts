@@ -1,4 +1,13 @@
 import { useDirectorStore } from "../store/directorStore";
+import { getCameraMotionPath } from "../schema/cameraMotion";
+import type { DirectorProject } from "../schema/directorProject";
+import { normalizeObjectMotionPath } from "../schema/objectMotion";
+import {
+  getMotionRouteSafety,
+  normalizeMotionRoute,
+  type DirectorMotionRoute,
+  type MotionRouteSafety,
+} from "../motion/routeMotion";
 import {
   DIRECTOR_EXTENSION_PROTOCOL_VERSION,
   DIRECTOR_EXTENSION_REQUEST_TYPE,
@@ -28,6 +37,11 @@ interface HostPanoramaPayload {
 interface HostSessionPayload {
   instanceId?: unknown;
   theme?: unknown;
+  route?: unknown;
+}
+
+interface HostRoutePayload {
+  route?: unknown;
 }
 
 export interface HostCaptureItemPayload {
@@ -42,6 +56,9 @@ export interface HostCaptureBatchPayload {
 let initialized = false;
 let activeExtensionExportRequestId: string | null = null;
 let clearTauriTransport: (() => void) | null = null;
+let hostedRoute: DirectorMotionRoute | null = null;
+let removeMotionRouteUnsubscribe: (() => void) | null = null;
+let suppressNextMotionRouteNotice = false;
 export const DIRECTOR_DESK_SESSION_OPENED_EVENT = "storyai:director-desk-session-opened";
 
 function normalizeString(value: unknown) {
@@ -93,6 +110,149 @@ function getInitialHostTheme() {
   }
 }
 
+function getActiveCamera(project: DirectorProject) {
+  return project.cameras.find((camera) => camera.id === project.activeCameraId)
+    ?? project.cameras[0]
+    ?? null;
+}
+
+function routeFingerprint(route: DirectorMotionRoute | null) {
+  return JSON.stringify(route);
+}
+
+/**
+ * The Zhiying host owns a single workflow-node route. The editor owns object
+ * motion paths, so this adapter keeps the host payload stable while letting
+ * the upstream timeline remain the only in-editor route UI.
+ */
+export function getHostedMotionRoute(
+  project: DirectorProject = useDirectorStore.getState().project
+): DirectorMotionRoute | null {
+  if (!hostedRoute) return null;
+
+  const character = project.objects.find(
+    (object) => object.id === hostedRoute?.characterId && object.kind === "character"
+  );
+  if (!character) return null;
+
+  const motionPath = normalizeObjectMotionPath(character.motionPath, character.transform);
+  if (motionPath.keyframes.length < 2) return null;
+
+  const camera = getActiveCamera(project);
+  const cameraPath = camera ? getCameraMotionPath(camera) : null;
+  const poseIds = new Map(hostedRoute.points.map((point) => [point.id, point.poseId]));
+
+  return normalizeMotionRoute(
+    {
+      ...hostedRoute,
+      characterId: character.id,
+      interpolationType: motionPath.interpolation === "linear" ? "linear" : "catmull-rom",
+      loop: cameraPath?.loop ?? hostedRoute.loop,
+      duration: cameraPath?.duration ?? hostedRoute.duration,
+      points: motionPath.keyframes.map((keyframe) => ({
+        id: keyframe.id,
+        position: keyframe.transform.position,
+        timestamp: keyframe.time,
+        ...(keyframe.actionPresetId || poseIds.get(keyframe.id)
+          ? { poseId: keyframe.actionPresetId ?? poseIds.get(keyframe.id) }
+          : {}),
+      })),
+    },
+    project
+  );
+}
+
+export function getHostedMotionRouteSafety(
+  project: DirectorProject = useDirectorStore.getState().project
+): MotionRouteSafety | null {
+  const route = getHostedMotionRoute(project);
+  return route ? getMotionRouteSafety(route, project) : null;
+}
+
+function applyHostedMotionRoute(route: DirectorMotionRoute | null) {
+  const state = useDirectorStore.getState();
+  const previousRoute = hostedRoute;
+  hostedRoute = route;
+
+  if (!route) {
+    if (previousRoute) {
+      state.updateObjectMotionPath(previousRoute.characterId, { keyframes: [] });
+    }
+    state.setCameraMotionPlaying(false);
+    state.setCameraMotionProgress(0);
+    return;
+  }
+
+  const character = state.project.objects.find(
+    (object) => object.id === route.characterId && object.kind === "character"
+  );
+  if (!character) {
+    hostedRoute = null;
+    return;
+  }
+
+  const currentPath = normalizeObjectMotionPath(character.motionPath, character.transform);
+  state.updateObjectMotionPath(route.characterId, {
+    ...currentPath,
+    interpolation: route.interpolationType === "linear" ? "linear" : "smooth",
+    speedMode: "uniform",
+    keyframes: route.points.map((point) => ({
+      id: point.id,
+      time: point.timestamp,
+      transform: {
+        position: [...point.position],
+        rotation: [...character.transform.rotation],
+        scale: [...character.transform.scale],
+      },
+      actionPresetId: point.poseId ?? null,
+      facingMode: "path",
+      pointBehavior: "pass",
+      holdSeconds: 0,
+      holdAction: "current",
+      holdActionPresetId: null,
+    })),
+  });
+
+  const nextState = useDirectorStore.getState();
+  const camera = getActiveCamera(nextState.project);
+  if (camera) {
+    nextState.updateCameraMotionPath(camera.id, {
+      duration: route.duration,
+      loop: route.loop,
+    });
+  }
+  nextState.selectObject(route.characterId);
+  nextState.setCameraMotionPlaying(false);
+  nextState.setCameraMotionProgress(0);
+}
+
+function postMotionRouteToHost(route: DirectorMotionRoute | null) {
+  postDirectorDeskMessageToHost({
+    type: "storyai:director-desk-route-synced",
+    payload: { route },
+  });
+}
+
+function subscribeToMotionRouteUpdates() {
+  if (removeMotionRouteUnsubscribe) return;
+
+  let previousFingerprint = routeFingerprint(getHostedMotionRoute());
+  removeMotionRouteUnsubscribe = useDirectorStore.subscribe((state) => {
+    const route = getHostedMotionRoute(state.project);
+    const fingerprint = routeFingerprint(route);
+    if (fingerprint === previousFingerprint) return;
+
+    previousFingerprint = fingerprint;
+    hostedRoute = route;
+    if (getHostedMotionRouteSafety(state.project)?.status === "blocked" && state.cameraMotionPlaying) {
+      state.setCameraMotionPlaying(false);
+    }
+    if (!suppressNextMotionRouteNotice) {
+      postMotionRouteToHost(route);
+    }
+  });
+}
+
 function isSupportedHostImageUrl(value: string) {
   if (value.startsWith("data:image/")) {
     return true;
@@ -131,10 +291,28 @@ function openHostSession(payload: HostSessionPayload) {
     applyDirectorDeskTheme(theme);
   }
   if (instanceId) {
-    useDirectorStore.getState().openScopedScene(instanceId);
+    suppressNextMotionRouteNotice = true;
+    const state = useDirectorStore.getState();
+    state.openScopedScene(instanceId);
+    if (Object.prototype.hasOwnProperty.call(payload, "route")) {
+      applyHostedMotionRoute(normalizeMotionRoute(payload.route, useDirectorStore.getState().project));
+    } else {
+      hostedRoute = null;
+    }
+    suppressNextMotionRouteNotice = false;
     window.dispatchEvent(new CustomEvent(DIRECTOR_DESK_SESSION_OPENED_EVENT, { detail: { instanceId } }));
     postDirectorDeskMessageToHost({ type: "storyai:director-desk-ready" });
+    postMotionRouteToHost(getHostedMotionRoute());
   }
+}
+
+function applyHostMotionRoute(payload: HostRoutePayload) {
+  if (!Object.prototype.hasOwnProperty.call(payload, "route")) return;
+
+  suppressNextMotionRouteNotice = true;
+  applyHostedMotionRoute(normalizeMotionRoute(payload.route, useDirectorStore.getState().project));
+  suppressNextMotionRouteNotice = false;
+  postMotionRouteToHost(getHostedMotionRoute());
 }
 
 export function postDirectorDeskMessageToHost(message: DirectorDeskTransportMessage) {
@@ -297,6 +475,11 @@ function handleHostProtocolMessage(message: DirectorDeskTransportMessage) {
     return;
   }
 
+  if (message.type === "storyai:director-desk-route") {
+    applyHostMotionRoute((message.payload || {}) as HostRoutePayload);
+    return;
+  }
+
   if (message.type === DIRECTOR_EXTENSION_REQUEST_TYPE) {
     void handleDirectorExtensionRequest(message.payload);
   }
@@ -316,6 +499,7 @@ export function initDirectorDeskHostBridge() {
   initialized = true;
   applyDirectorDeskTheme(getInitialHostTheme() ?? "dark");
   window.addEventListener("message", handleHostMessage);
+  subscribeToMotionRouteUpdates();
   void initTauriDirectorHostTransport(handleHostProtocolMessage).then((cleanup) => {
     if (!cleanup) return;
     if (!initialized) {
@@ -333,7 +517,11 @@ export function clearDirectorDeskHostBridge() {
 
   initialized = false;
   activeExtensionExportRequestId = null;
+  hostedRoute = null;
+  suppressNextMotionRouteNotice = false;
   window.removeEventListener("message", handleHostMessage);
+  removeMotionRouteUnsubscribe?.();
+  removeMotionRouteUnsubscribe = null;
   clearTauriTransport?.();
   clearTauriTransport = null;
 }

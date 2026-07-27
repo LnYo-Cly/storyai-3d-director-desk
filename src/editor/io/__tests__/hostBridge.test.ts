@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   clearDirectorDeskHostBridge,
+  getHostedMotionRoute,
+  getHostedMotionRouteSafety,
   initDirectorDeskHostBridge,
 } from "../hostBridge";
 import { createInitialDirectorState, useDirectorStore } from "../../store/directorStore";
@@ -119,6 +121,71 @@ it("rejects host panorama messages with incomplete source metadata", () => {
   );
 
   expect(useDirectorStore.getState().project.panoramaAssetId).toBeNull();
+});
+
+it("maps the Zhiying route protocol onto the upstream object-motion timeline and syncs edits back", () => {
+  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+  initDirectorDeskHostBridge();
+
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "storyai:director-desk-session",
+        payload: {
+          instanceId: "node_director_route",
+          route: {
+            id: "route-from-canvas",
+            characterId: "char_default_a",
+            interpolationType: "linear",
+            duration: 4,
+            snapToGround: true,
+            points: [
+              { id: "route-start", position: [0, 8, 0], timestamp: 0, poseId: "walk" },
+              { id: "route-end", position: [2, 8, 0], timestamp: 1 },
+            ],
+          },
+        },
+      },
+      origin: window.location.origin,
+    })
+  );
+
+  const initialState = useDirectorStore.getState();
+  const character = initialState.project.objects.find((object) => object.id === "char_default_a");
+  expect(character?.motionPath).toMatchObject({
+    interpolation: "linear",
+    keyframes: [
+      { id: "route-start", time: 0, actionPresetId: "walk" },
+      { id: "route-end", time: 1 },
+    ],
+  });
+  expect(character?.motionPath?.keyframes[0]?.transform.position[1]).toBe(initialState.project.scene.groundHeight);
+  expect(getHostedMotionRouteSafety()).toEqual({ status: "safe" });
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "storyai:director-desk-route-synced",
+      payload: expect.objectContaining({ route: expect.objectContaining({ id: "route-from-canvas" }) }),
+    }),
+    window.location.origin
+  );
+
+  postMessage.mockClear();
+  initialState.updateObjectMotionKeyframe("char_default_a", "route-end", {
+    transform: { position: [3, initialState.project.scene.groundHeight, 0] },
+  });
+
+  expect(getHostedMotionRoute()?.points[1]?.position).toEqual([3, initialState.project.scene.groundHeight, 0]);
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "storyai:director-desk-route-synced",
+      payload: expect.objectContaining({
+        route: expect.objectContaining({
+          points: expect.arrayContaining([expect.objectContaining({ id: "route-end", position: [3, 0, 0] })]),
+        }),
+      }),
+    }),
+    window.location.origin
+  );
 });
 
 it("switches director store persistence when the host sends a card session", () => {

@@ -16,9 +16,9 @@
     "storyboard"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
+    "dev": "vite --config vite.config.ts",
+    "build": "tsc -b && vite build --config vite.config.ts",
+    "test": "vitest --config vite.config.ts run",
     "preview": "vite preview"
   },
   "dependencies": {

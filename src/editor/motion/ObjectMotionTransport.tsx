@@ -7,6 +7,8 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import { useEffect } from "react";
+import { getHostedMotionRouteSafety } from "../io/hostBridge";
 import { DEFAULT_CAMERA_MOTION_PATH, getCameraMotionPath, getCameraMotionTimingPlan } from "../schema/cameraMotion";
 import { getObjectMotionTimingPlan, normalizeObjectMotionPath } from "../schema/objectMotion";
 import type { RouteTimingPlan } from "../schema/routeTiming";
@@ -60,6 +62,7 @@ export function ObjectMotionTransport() {
   const playing = useDirectorStore((state) => state.cameraMotionPlaying);
   const pilotMode = useDirectorStore((state) => state.cameraPilotMode);
   const selectedObjectId = useDirectorStore((state) => state.selectedObjectId);
+  const project = useDirectorStore((state) => state.project);
   const objects = useDirectorStore((state) => state.project.objects);
   const activeCamera = useDirectorStore((state) =>
     state.project.cameras.find((camera) => camera.id === state.project.activeCameraId)
@@ -97,6 +100,9 @@ export function ObjectMotionTransport() {
     || objects.some(
       (object) => (object.motionPath?.keyframes?.length ?? 0) >= 2 || Boolean(object.characterRig?.actionPresetId)
     );
+  const hostedRouteSafety = getHostedMotionRouteSafety(project);
+  const blockedHostedRoute = hostedRouteSafety?.status === "blocked" ? hostedRouteSafety : null;
+  const canPlay = hasPlayableObjectMotion && !blockedHostedRoute;
   const currentKeyframe = keyframes.find((keyframe, index) =>
     Math.abs((objectSpans?.arrivals[index] ?? keyframe.time) - progress) <= CURRENT_KEYFRAME_TOLERANCE
   );
@@ -105,8 +111,14 @@ export function ObjectMotionTransport() {
   const pointLabel = isCharacterRoute ? "路线点" : "动作点";
   const recordLabel = isAtStart ? "记录起点" : "记录当前位置";
 
+  useEffect(() => {
+    if (blockedHostedRoute && playing) {
+      setPlaying(false);
+    }
+  }, [blockedHostedRoute, playing, setPlaying]);
+
   function togglePlayback() {
-    if (!hasPlayableObjectMotion) return;
+    if (!canPlay) return;
     if (playing) {
       setPlaying(false);
       return;
@@ -132,10 +144,12 @@ export function ObjectMotionTransport() {
         <button
           className="object-motion-transport__play object-motion-transport__play--compact"
           type="button"
-          disabled={!hasPlayableObjectMotion}
-          aria-label={hasPlayableObjectMotion
+          disabled={!canPlay}
+          aria-label={canPlay
             ? playing ? "暂停人物和物品动作" : "播放人物和物品动作"
-            : "还没有可播放的人物和物品动作"}
+            : blockedHostedRoute?.reason === "obstacle"
+              ? `路线被 ${blockedHostedRoute.obstacleName || "场景障碍"} 阻挡`
+              : "还没有可播放的人物和物品动作"}
           aria-pressed={playing}
           onClick={togglePlayback}
         >
@@ -166,7 +180,11 @@ export function ObjectMotionTransport() {
             : <Package size={17} />}
         </span>
         <span className="object-motion-transport__subject-copy">
-          <small>{selectedObject ? isCharacterRoute ? "人物路线播放" : `${objectKindLabel}动作` : "人物 / 道具动作"}</small>
+          <small>
+            {blockedHostedRoute?.reason === "obstacle"
+              ? `路线被 ${blockedHostedRoute.obstacleName || "场景障碍"} 阻挡`
+              : selectedObject ? isCharacterRoute ? "人物路线播放" : `${objectKindLabel}动作` : "人物 / 道具动作"}
+          </small>
           <strong title={selectedObject?.name}>
             {selectedObject?.name ?? "请先选中人物或道具"}
           </strong>
@@ -185,10 +203,12 @@ export function ObjectMotionTransport() {
         <button
           className="object-motion-transport__play"
           type="button"
-          disabled={!hasPlayableObjectMotion}
-          aria-label={hasPlayableObjectMotion
+          disabled={!canPlay}
+          aria-label={canPlay
             ? playing ? "暂停人物和物品动作" : "播放人物和物品动作"
-            : "还没有可播放的人物和物品动作"}
+            : blockedHostedRoute?.reason === "obstacle"
+              ? `路线被 ${blockedHostedRoute.obstacleName || "场景障碍"} 阻挡`
+              : "还没有可播放的人物和物品动作"}
           aria-pressed={playing}
           onClick={togglePlayback}
         >

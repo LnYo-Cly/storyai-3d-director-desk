@@ -671,6 +671,10 @@
   font-family: "PingFang SC", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.top-bar--embedded {
+  grid-template-columns: 1fr;
+}
+
 .top-bar-title {
   margin: 0;
   font-size: 16px;
