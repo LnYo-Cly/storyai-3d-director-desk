@@ -1077,7 +1077,7 @@ function trimUndoStack(stack: DirectorState[]) {
 
 export const useDirectorStore = create<DirectorStore>((set, get) => {
   const initialRuntimeState = createRuntimeStateFromPersistedState(
-    createInitialDirectorState({ includePersistedLocalAssets: true, includePersistedScene: false })
+    createInitialDirectorState({ includePersistedLocalAssets: true, includePersistedScene: true })
   );
 
   function commitMutation(
