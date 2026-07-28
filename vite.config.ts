@@ -3,10 +3,12 @@ import react from "@vitejs/plugin-react";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const localGuoAssetsAvailable = existsSync(resolve(process.cwd(), "public/local-assets/guo-3d-assets"));
+// Host builds opt out because the local sample packs have unverified redistribution terms.
+const includeLocalAssets = process.env.DIRECTOR_DESK_INCLUDE_LOCAL_ASSETS !== "0";
+const localGuoAssetsAvailable = includeLocalAssets && existsSync(resolve(process.cwd(), "public/local-assets/guo-3d-assets"));
 const appVersion = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")).version ?? "0.0.0";
 const requiredMixamoCharacters = ["camille.fbx", "xbot.glb", "soldier.glb"];
-const localMixamoCharacterAvailable = requiredMixamoCharacters.every((fileName) =>
+const localMixamoCharacterAvailable = includeLocalAssets && requiredMixamoCharacters.every((fileName) =>
   existsSync(resolve(process.cwd(), "public/local-assets/mixamo/characters", fileName))
 );
 const requiredMixamoAnimations = [
@@ -17,7 +19,7 @@ const requiredMixamoAnimations = [
   "jump.fbx",
   "wave.fbx",
 ];
-const localMixamoAnimationsAvailable = requiredMixamoAnimations.every((fileName) =>
+const localMixamoAnimationsAvailable = includeLocalAssets && requiredMixamoAnimations.every((fileName) =>
   existsSync(resolve(process.cwd(), "public/local-assets/mixamo/animations", fileName))
 );
 
