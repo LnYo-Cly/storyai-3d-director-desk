@@ -359,3 +359,15 @@ it("keeps the demo usable in narrower in-app browser widths", () => {
   expect(css).toMatch(/@media \(max-width: 1180px\)\s*\{[\s\S]*?\.director-shell-fullbleed\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   expect(css).not.toContain("min-width: 1280px;");
 });
+
+it("reserves a non-overlapping action column in the motion workspace header", () => {
+  const css = readStyleBundle();
+
+  expect(css).toMatch(/\.motion-studio-header\s*\{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;[\s\S]*?column-gap:\s*10px;/);
+  expect(css).toMatch(/\.motion-studio-heading\s*\{[\s\S]*?min-width:\s*0;/);
+  expect(css).toMatch(/\.motion-studio-heading\s*>\s*div\s*\{[\s\S]*?min-width:\s*0;/);
+  expect(css).toMatch(/\.motion-studio-heading\s+p\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?text-overflow:\s*ellipsis;[\s\S]*?white-space:\s*nowrap;/);
+  expect(css).toMatch(/\.motion-studio-header-actions\s*\{[\s\S]*?flex:\s*0\s+0\s+auto;[\s\S]*?gap:\s*8px;/);
+  expect(css).toMatch(/\.motion-studio-export,\s*[\r\n]+\.motion-studio-close\s*\{[\s\S]*?flex:\s*0\s+0\s+auto;/);
+  expect(css).toMatch(/@media \(max-width: 600px\)\s*\{[\s\S]*?\.motion-studio\s*\{[\s\S]*?top:\s*58px;[\s\S]*?bottom:\s*128px;/);
+});

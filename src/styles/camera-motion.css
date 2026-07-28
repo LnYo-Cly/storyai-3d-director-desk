@@ -54,9 +54,10 @@
 }
 
 .motion-studio-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
+  column-gap: 10px;
   min-height: 58px;
   padding: 10px 12px 10px 14px;
   border-bottom: 1px solid rgb(var(--border-rgb) / 0.52);
@@ -75,10 +76,12 @@
 }
 
 .motion-studio-heading {
+  min-width: 0;
   gap: 10px;
 }
 
 .motion-studio-heading > div {
+  min-width: 0;
   align-items: flex-start;
   flex-direction: column;
   gap: 1px;
@@ -106,9 +109,12 @@
 }
 
 .motion-studio-heading p {
+  overflow: hidden;
   color: rgb(var(--text-muted-rgb));
   font-size: 11px;
   line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .motion-studio-close {
@@ -124,8 +130,14 @@
 
 .motion-studio-header-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+}
+
+.motion-studio-export,
+.motion-studio-close {
+  flex: 0 0 auto;
 }
 
 .motion-studio-export {

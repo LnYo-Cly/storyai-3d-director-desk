@@ -84,6 +84,21 @@ it("renders the director desk header and view mode switch", () => {
   expect(screen.getByLabelText("关闭")).toBeInTheDocument();
 });
 
+it("keeps the reference header control path available", async () => {
+  const user = userEvent.setup();
+  render(<App />);
+
+  expect(screen.getByRole("button", { name: "视角手感" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "性能 自动" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "打开运镜工作台" }));
+  expect(useDirectorStore.getState().motionStudioOpen).toBe(true);
+  expect(screen.getByRole("button", { name: "关闭运镜工作台" })).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "关闭运镜工作台" }));
+  expect(useDirectorStore.getState().motionStudioOpen).toBe(false);
+});
+
 it("runs the benchmark as a temporary workspace without adding it to the director registry", () => {
   window.history.replaceState({}, "", "/?instanceId=benchmark_test&benchmark=standard");
 
