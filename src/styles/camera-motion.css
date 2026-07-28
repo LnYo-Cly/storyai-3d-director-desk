@@ -213,6 +213,9 @@
 .motion-monitor {
   position: absolute;
   z-index: 18;
+  top: 140px;
+  right: calc(var(--motion-studio-width) + 16px);
+  left: auto;
   width: min(320px, calc(100% - 640px));
   min-width: 220px;
   overflow: hidden;

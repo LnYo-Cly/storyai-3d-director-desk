@@ -943,3 +943,22 @@ it("adds a new waypoint for every Enter press while character action playback is
 
   expect(useDirectorStore.getState().project.cameras[0].motionPath?.keyframes).toHaveLength(3);
 });
+
+it("clears the launch-button focus so Enter records after starting pilot mode", () => {
+  const initialState = createInitialDirectorState();
+  useDirectorStore.setState({
+    ...useDirectorStore.getState(),
+    ...initialState,
+    cameraPilotMode: "idle",
+    motionStudioOpen: true,
+  });
+  render(<App />);
+
+  const startPilotButton = screen.getByRole("button", { name: "开始掌镜" });
+  startPilotButton.focus();
+  fireEvent.click(startPilotButton);
+
+  expect(document.activeElement).toBe(document.body);
+  fireEvent.keyDown(window, { code: "Enter" });
+  expect(useDirectorStore.getState().project.cameras[0].motionPath?.keyframes).toHaveLength(1);
+});

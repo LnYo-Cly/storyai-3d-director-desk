@@ -718,31 +718,51 @@ function MotionMonitor({
   const monitorCamera = monitorCameraBase
     ? { ...monitorCameraBase, fov: monitorFov ?? monitorCameraBase.fov }
     : undefined;
-  const [position, setPosition] = useState({ x: 214, y: 18 });
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const monitorRef = useRef<HTMLElement | null>(null);
   const dragRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null);
 
   useEffect(() => {
+    function clampPosition(nextPosition: { x: number; y: number }) {
+      const monitor = monitorRef.current;
+      const frame = monitor?.offsetParent as HTMLElement | null;
+      const width = monitor?.offsetWidth || Math.min(320, Math.max(220, window.innerWidth - 640));
+      const height = monitor?.offsetHeight || 230;
+      const frameWidth = frame?.clientWidth || window.innerWidth;
+      const frameHeight = frame?.clientHeight || window.innerHeight;
+
+      return {
+        x: Math.min(Math.max(8, nextPosition.x), Math.max(8, frameWidth - width - 8)),
+        y: Math.min(Math.max(8, nextPosition.y), Math.max(8, frameHeight - height - 8)),
+      };
+    }
+
     function handlePointerMove(event: PointerEvent) {
       const drag = dragRef.current;
       if (!drag) return;
-      const width = Math.min(320, Math.max(220, window.innerWidth - 640));
-      setPosition({
-        x: Math.min(Math.max(8, drag.startX + event.clientX - drag.pointerX), Math.max(8, window.innerWidth - width - 8)),
-        y: Math.min(Math.max(8, drag.startY + event.clientY - drag.pointerY), Math.max(8, window.innerHeight - 230)),
-      });
+      setPosition(clampPosition({
+        x: drag.startX + event.clientX - drag.pointerX,
+        y: drag.startY + event.clientY - drag.pointerY,
+      }));
     }
 
     function stopDragging() {
       dragRef.current = null;
     }
 
+    function handleResize() {
+      setPosition((currentPosition) => currentPosition ? clampPosition(currentPosition) : currentPosition);
+    }
+
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", stopDragging);
     window.addEventListener("pointercancel", stopDragging);
+    window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", stopDragging);
       window.removeEventListener("pointercancel", stopDragging);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
@@ -753,13 +773,19 @@ function MotionMonitor({
       aria-hidden={isBenchmarkProbe || undefined}
       aria-label={mainViewMode === "director" ? "成片实时监看" : "路线实时监看"}
       className={`motion-monitor${isBenchmarkProbe ? " is-benchmark-probe" : ""}`}
-      style={{ left: `${position.x}px`, top: `${position.y}px` }}
+      ref={monitorRef}
+      style={position ? { left: `${position.x}px`, right: "auto", top: `${position.y}px` } : undefined}
     >
       <header
         aria-label="拖动监看窗口"
         onPointerDown={(event) => {
           event.preventDefault();
-          dragRef.current = { pointerX: event.clientX, pointerY: event.clientY, startX: position.x, startY: position.y };
+          const monitorRect = monitorRef.current?.getBoundingClientRect();
+          const frameRect = (monitorRef.current?.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+          const startX = monitorRect && frameRect ? monitorRect.left - frameRect.left : position?.x ?? 8;
+          const startY = monitorRect && frameRect ? monitorRect.top - frameRect.top : position?.y ?? 8;
+          dragRef.current = { pointerX: event.clientX, pointerY: event.clientY, startX, startY };
+          setPosition({ x: startX, y: startY });
         }}
       >
         <span>{mainViewMode === "director" ? "成片监看" : "路线监看"}</span>
@@ -1346,6 +1372,8 @@ export function DirectorCanvas() {
   }
 
   function startPilotSession(editKeyframeId: string | null = null) {
+    const activeElement = typeof document === "undefined" ? null : document.activeElement;
+    if (activeElement instanceof HTMLElement) activeElement.blur();
     startCameraPilot("pilot", editKeyframeId);
     const canvas = viewportCanvasRef.current;
     if (canvas) void requestPointerLockSafely(canvas);
