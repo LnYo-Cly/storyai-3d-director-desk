@@ -6,12 +6,14 @@ export function PilotHud({
   onExit,
   onRecord,
   pointedTargetName,
+  waypointCount,
 }: {
   lockedTargetName: string | null;
   mode: Exclude<CameraPilotMode, "idle">;
   onExit: () => void;
   onRecord: () => void;
   pointedTargetName: string | null;
+  waypointCount: number;
 }) {
   const targetName = lockedTargetName ?? pointedTargetName;
   const crosshairLabel = lockedTargetName
@@ -24,7 +26,7 @@ export function PilotHud({
     <div className="pilot-hud" aria-label="第一人称掌镜控制层">
       <div className="pilot-status" role="status">
         <span className="pilot-status-dot" />
-        掌镜模式
+        掌镜模式 · 已记录 {waypointCount} 个轨迹点
       </div>
 
       <div className={`pilot-crosshair${lockedTargetName ? " is-locked" : targetName ? " is-pointing" : ""}`} aria-label={crosshairLabel}>

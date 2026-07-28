@@ -10,6 +10,7 @@ it("shows Q/E lift controls, action playback shortcut, and an accessible crossha
       onExit={() => undefined}
       onRecord={() => undefined}
       pointedTargetName="角色01"
+      waypointCount={2}
     />
   );
 
@@ -20,6 +21,7 @@ it("shows Q/E lift controls, action playback shortcut, and an accessible crossha
   expect(screen.getByLabelText("掌镜快捷键")).not.toHaveTextContent("Shift");
   expect(screen.queryByRole("button", { name: "播放人物" })).not.toBeInTheDocument();
   expect(screen.getByLabelText("掌镜快捷键")).toHaveTextContent("F 锁定主体");
+  expect(screen.getByRole("status")).toHaveTextContent("已记录 2 个轨迹点");
   expect(screen.getByRole("button", { name: "记录当前轨迹点" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "退出掌镜模式" })).toBeInTheDocument();
 });
@@ -32,6 +34,7 @@ it("makes empty space visibly lockable with F", () => {
       onExit={() => undefined}
       onRecord={() => undefined}
       pointedTargetName={null}
+      waypointCount={0}
     />
   );
 
@@ -51,6 +54,7 @@ it("keeps only exit and waypoint recording actions in the HUD", () => {
       onExit={onExit}
       onRecord={onRecord}
       pointedTargetName={null}
+      waypointCount={0}
     />
   );
 

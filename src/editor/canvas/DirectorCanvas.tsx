@@ -975,6 +975,10 @@ export function DirectorCanvas() {
   const activeCamera = useDirectorStore((state) =>
     state.project.cameras.find((item) => item.id === state.project.activeCameraId) ?? state.project.cameras[0]
   );
+  const pilotWaypointCount = useDirectorStore((state) => {
+    const camera = state.project.cameras.find((item) => item.id === state.project.activeCameraId) ?? state.project.cameras[0];
+    return camera?.motionPath?.keyframes.length ?? 0;
+  });
   const cameraMotionPlaying = useDirectorStore((state) => state.cameraMotionPlaying);
   const cameraMotionPlaybackRevision = useDirectorStore((state) => state.cameraMotionPlaybackRevision);
   const motionStudioOpen = useDirectorStore((state) => state.motionStudioOpen);
@@ -1579,6 +1583,7 @@ export function DirectorCanvas() {
           onExit={stopPilotSession}
           onRecord={() => recordPilotSnapshot()}
           pointedTargetName={hoveredPilotTargetName}
+          waypointCount={pilotWaypointCount}
         />
       ) : null}
     </div>
