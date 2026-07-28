@@ -188,6 +188,48 @@ it("maps the Zhiying route protocol onto the upstream object-motion timeline and
   );
 });
 
+it("binds a user-selected character and syncs the first valid two-point route without another ready handshake", () => {
+  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+  initDirectorDeskHostBridge();
+
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "storyai:director-desk-session",
+        payload: { instanceId: "node_director_empty", route: null },
+      },
+      origin: window.location.origin,
+    })
+  );
+
+  expect(postMessage).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "storyai:director-desk-ready" }),
+    window.location.origin
+  );
+
+  postMessage.mockClear();
+  const state = useDirectorStore.getState();
+  state.selectObject("char_default_a");
+  state.addCharacterRoutePoint("char_default_a");
+  expect(getHostedMotionRoute()).toBeNull();
+
+  state.addCharacterRoutePoint("char_default_a");
+
+  expect(getHostedMotionRoute()).toMatchObject({
+    characterId: "char_default_a",
+    points: [{}, {}],
+  });
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "storyai:director-desk-route-synced",
+      payload: expect.objectContaining({
+        route: expect.objectContaining({ characterId: "char_default_a" }),
+      }),
+    }),
+    window.location.origin
+  );
+});
+
 it("switches director store persistence when the host sends a card session", () => {
   initDirectorDeskHostBridge();
 

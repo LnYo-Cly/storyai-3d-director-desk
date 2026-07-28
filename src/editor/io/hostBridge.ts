@@ -57,6 +57,7 @@ let initialized = false;
 let activeExtensionExportRequestId: string | null = null;
 let clearTauriTransport: (() => void) | null = null;
 let hostedRoute: DirectorMotionRoute | null = null;
+let hostedRouteCharacterId: string | null = null;
 let removeMotionRouteUnsubscribe: (() => void) | null = null;
 let suppressNextMotionRouteNotice = false;
 export const DIRECTOR_DESK_SESSION_OPENED_EVENT = "storyai:director-desk-session-opened";
@@ -120,6 +121,18 @@ function routeFingerprint(route: DirectorMotionRoute | null) {
   return JSON.stringify(route);
 }
 
+function createHostedRouteSeed(characterId: string): DirectorMotionRoute {
+  return {
+    id: `route-${characterId}`,
+    characterId,
+    points: [],
+    interpolationType: "catmull-rom",
+    loop: false,
+    duration: 10,
+    snapToGround: true,
+  };
+}
+
 /**
  * The Zhiying host owns a single workflow-node route. The editor owns object
  * motion paths, so this adapter keeps the host payload stable while letting
@@ -128,10 +141,15 @@ function routeFingerprint(route: DirectorMotionRoute | null) {
 export function getHostedMotionRoute(
   project: DirectorProject = useDirectorStore.getState().project
 ): DirectorMotionRoute | null {
-  if (!hostedRoute) return null;
+  const characterId = hostedRouteCharacterId ?? hostedRoute?.characterId;
+  if (!characterId) return null;
+
+  const route = hostedRoute?.characterId === characterId
+    ? hostedRoute
+    : createHostedRouteSeed(characterId);
 
   const character = project.objects.find(
-    (object) => object.id === hostedRoute?.characterId && object.kind === "character"
+    (object) => object.id === characterId && object.kind === "character"
   );
   if (!character) return null;
 
@@ -140,15 +158,15 @@ export function getHostedMotionRoute(
 
   const camera = getActiveCamera(project);
   const cameraPath = camera ? getCameraMotionPath(camera) : null;
-  const poseIds = new Map(hostedRoute.points.map((point) => [point.id, point.poseId]));
+  const poseIds = new Map(route.points.map((point) => [point.id, point.poseId]));
 
   return normalizeMotionRoute(
     {
-      ...hostedRoute,
+      ...route,
       characterId: character.id,
       interpolationType: motionPath.interpolation === "linear" ? "linear" : "catmull-rom",
-      loop: cameraPath?.loop ?? hostedRoute.loop,
-      duration: cameraPath?.duration ?? hostedRoute.duration,
+      loop: cameraPath?.loop ?? route.loop,
+      duration: cameraPath?.duration ?? route.duration,
       points: motionPath.keyframes.map((keyframe) => ({
         id: keyframe.id,
         position: keyframe.transform.position,
@@ -173,6 +191,7 @@ function applyHostedMotionRoute(route: DirectorMotionRoute | null) {
   const state = useDirectorStore.getState();
   const previousRoute = hostedRoute;
   hostedRoute = route;
+  hostedRouteCharacterId = route?.characterId ?? null;
 
   if (!route) {
     if (previousRoute) {
@@ -237,13 +256,28 @@ function subscribeToMotionRouteUpdates() {
   if (removeMotionRouteUnsubscribe) return;
 
   let previousFingerprint = routeFingerprint(getHostedMotionRoute());
+  let previousSelectedObjectId = useDirectorStore.getState().selectedObjectId;
   removeMotionRouteUnsubscribe = useDirectorStore.subscribe((state) => {
+    const selectedObjectId = state.selectedObjectId;
+    if (!suppressNextMotionRouteNotice && !hostedRouteCharacterId && selectedObjectId !== previousSelectedObjectId) {
+      const selectedCharacter = state.project.objects.find(
+        (object) => object.id === selectedObjectId && object.kind === "character"
+      );
+      if (selectedCharacter) {
+        hostedRouteCharacterId = selectedCharacter.id;
+      }
+    }
+    previousSelectedObjectId = selectedObjectId;
+
     const route = getHostedMotionRoute(state.project);
     const fingerprint = routeFingerprint(route);
     if (fingerprint === previousFingerprint) return;
 
     previousFingerprint = fingerprint;
     hostedRoute = route;
+    if (route) {
+      hostedRouteCharacterId = route.characterId;
+    }
     if (getHostedMotionRouteSafety(state.project)?.status === "blocked" && state.cameraMotionPlaying) {
       state.setCameraMotionPlaying(false);
     }
@@ -298,10 +332,10 @@ function openHostSession(payload: HostSessionPayload) {
       applyHostedMotionRoute(normalizeMotionRoute(payload.route, useDirectorStore.getState().project));
     } else {
       hostedRoute = null;
+      hostedRouteCharacterId = null;
     }
     suppressNextMotionRouteNotice = false;
     window.dispatchEvent(new CustomEvent(DIRECTOR_DESK_SESSION_OPENED_EVENT, { detail: { instanceId } }));
-    postDirectorDeskMessageToHost({ type: "storyai:director-desk-ready" });
     postMotionRouteToHost(getHostedMotionRoute());
   }
 }
@@ -518,6 +552,7 @@ export function clearDirectorDeskHostBridge() {
   initialized = false;
   activeExtensionExportRequestId = null;
   hostedRoute = null;
+  hostedRouteCharacterId = null;
   suppressNextMotionRouteNotice = false;
   window.removeEventListener("message", handleHostMessage);
   removeMotionRouteUnsubscribe?.();
