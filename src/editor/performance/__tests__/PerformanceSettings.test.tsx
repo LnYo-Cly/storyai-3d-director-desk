@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import { createInitialDirectorState, useDirectorStore } from "../../store/directorStore";
 import { publishAutomaticPerformanceRuntime } from "../automaticPerformanceRuntime";
-import { PerformanceSettings } from "../PerformanceSettings";
+import { PerformanceBenchmarkStatus, PerformanceSettings } from "../PerformanceSettings";
 
 beforeEach(() => {
   window.history.replaceState({}, "", "/");
@@ -75,7 +75,7 @@ it("closes with Escape and returns focus to the trigger", async () => {
   expect(trigger).toHaveFocus();
 });
 
-it("keeps benchmark progress and the anonymous download visible without opening settings", () => {
+it("renders benchmark progress inline instead of as a floating HUD", () => {
   window.history.replaceState({}, "", "/?benchmark=medium&performance=balanced");
   window.__DIRECTOR_BENCHMARK_REPORT__ = {
     status: "complete",
@@ -98,10 +98,12 @@ it("keeps benchmark progress and the anonymous download visible without opening 
     viewport: { cssHeight: 720, cssWidth: 1280, pixelHeight: 720, pixelWidth: 1280 },
   };
 
-  render(<PerformanceSettings />);
+  const { container } = render(<PerformanceBenchmarkStatus />);
 
-  const hud = screen.getByRole("status", { name: "性能基准进度" });
-  expect(hud).toHaveTextContent("中等性能基准");
-  expect(hud).toHaveTextContent("60 FPS · 1% Low 55");
-  expect(within(hud).getByRole("button", { name: "下载匿名报告" })).toBeInTheDocument();
+  const status = screen.getByRole("status", { name: "性能基准进度" });
+  expect(status).toHaveClass("performance-benchmark-status");
+  expect(status).toHaveTextContent("中等性能基准");
+  expect(status).toHaveTextContent("60 FPS · 1% Low 55");
+  expect(within(status).getByRole("button", { name: "下载匿名报告" })).toBeInTheDocument();
+  expect(container.querySelector(".performance-benchmark-hud")).not.toBeInTheDocument();
 });

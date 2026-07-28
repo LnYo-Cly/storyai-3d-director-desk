@@ -222,6 +222,11 @@
   box-shadow: 0 16px 36px rgb(0 0 0 / 0.38);
 }
 
+.motion-monitor.is-benchmark-probe {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .motion-monitor header {
   display: flex;
   align-items: center;

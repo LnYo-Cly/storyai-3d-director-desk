@@ -25,10 +25,6 @@ export function PerformanceSettings() {
   const profile = useDirectorStore((state) => state.performanceProfile);
   const setProfile = useDirectorStore((state) => state.setPerformanceProfile);
   const [open, setOpen] = useState(false);
-  const [benchmarkStatus, setBenchmarkStatus] = useState(() => window.__DIRECTOR_BENCHMARK_STATUS__);
-  const [benchmarkReport, setBenchmarkReport] = useState<DirectorBenchmarkReport | null>(
-    () => window.__DIRECTOR_BENCHMARK_REPORT__ ?? null
-  );
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const automaticRuntime = useSyncExternalStore(
@@ -39,7 +35,6 @@ export function PerformanceSettings() {
   const effectiveProfile = profile === "auto"
     ? PERFORMANCE_PROFILE_CONFIGS[automaticRuntime.effectiveProfileId]
     : getEffectivePerformanceProfile(profile);
-  const benchmarkMode = getPerformanceBenchmarkMode(window.location.search);
   const selectedOption = PERFORMANCE_PROFILE_OPTIONS.find((option) => option.id === profile)
     ?? PERFORMANCE_PROFILE_OPTIONS[0];
 
@@ -61,23 +56,6 @@ export function PerformanceSettings() {
       window.removeEventListener("keydown", closeWithEscape);
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!benchmarkMode) return;
-    function updateBenchmarkResult(event: Event) {
-      const detail = (event as CustomEvent<DirectorBenchmarkReport>).detail;
-      setBenchmarkReport(detail);
-      setBenchmarkStatus("complete");
-    }
-    const interval = window.setInterval(() => {
-      setBenchmarkStatus(window.__DIRECTOR_BENCHMARK_STATUS__);
-    }, 250);
-    window.addEventListener(PERFORMANCE_BENCHMARK_COMPLETE_EVENT, updateBenchmarkResult);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener(PERFORMANCE_BENCHMARK_COMPLETE_EVENT, updateBenchmarkResult);
-    };
-  }, [benchmarkMode]);
 
   function openBenchmark(mode: "light" | "medium" | "heavy") {
     const url = buildPerformanceBenchmarkUrl(window.location.href, mode, effectiveProfile.id);
@@ -158,43 +136,66 @@ export function PerformanceSettings() {
                 </button>
               ))}
             </div>
-            {benchmarkMode ? (
-              <div className="performance-benchmark-result" role="status">
-                {benchmarkReport ? (
-                  <>
-                    <span>{benchmarkReport.averageFps} FPS · 低帧 {benchmarkReport.onePercentLowFps} FPS</span>
-                    <button type="button" onClick={() => downloadPerformanceBenchmarkReport(benchmarkReport)}>
-                      <Download aria-hidden="true" size={13} />
-                      下载匿名报告
-                    </button>
-                  </>
-                ) : (
-                  <span>{benchmarkStatus === "sampling" ? "正在采样…" : "正在预热场景…"}</span>
-                )}
-              </div>
-            ) : null}
           </section>
         </section>
       ) : null}
-      {benchmarkMode ? (
-        <aside className="performance-benchmark-hud" role="status" aria-label="性能基准进度">
-          <div>
-            <strong>{PERFORMANCE_BENCHMARK_SCENES[benchmarkMode].label}性能基准</strong>
-            <small>{effectiveProfile.label}档</small>
-          </div>
-          {benchmarkReport ? (
-            <>
-              <span>{benchmarkReport.averageFps} FPS · 1% Low {benchmarkReport.onePercentLowFps}</span>
-              <button type="button" onClick={() => downloadPerformanceBenchmarkReport(benchmarkReport)}>
-                <Download aria-hidden="true" size={13} />
-                下载匿名报告
-              </button>
-            </>
-          ) : (
-            <span>{benchmarkStatus === "sampling" ? "正在采样，约 6 秒" : "正在预热场景，约 2 秒"}</span>
-          )}
-        </aside>
-      ) : null}
+    </div>
+  );
+}
+
+export function PerformanceBenchmarkStatus() {
+  const profile = useDirectorStore((state) => state.performanceProfile);
+  const automaticRuntime = useSyncExternalStore(
+    subscribeAutomaticPerformanceRuntime,
+    getAutomaticPerformanceRuntimeSnapshot,
+    getAutomaticPerformanceRuntimeSnapshot
+  );
+  const effectiveProfile = profile === "auto"
+    ? PERFORMANCE_PROFILE_CONFIGS[automaticRuntime.effectiveProfileId]
+    : getEffectivePerformanceProfile(profile);
+  const benchmarkMode = getPerformanceBenchmarkMode(window.location.search);
+  const [benchmarkStatus, setBenchmarkStatus] = useState(() => window.__DIRECTOR_BENCHMARK_STATUS__);
+  const [benchmarkReport, setBenchmarkReport] = useState<DirectorBenchmarkReport | null>(
+    () => window.__DIRECTOR_BENCHMARK_REPORT__ ?? null
+  );
+
+  useEffect(() => {
+    if (!benchmarkMode) return;
+    function updateBenchmarkResult(event: Event) {
+      const detail = (event as CustomEvent<DirectorBenchmarkReport>).detail;
+      setBenchmarkReport(detail);
+      setBenchmarkStatus("complete");
+    }
+    const interval = window.setInterval(() => {
+      setBenchmarkStatus(window.__DIRECTOR_BENCHMARK_STATUS__);
+    }, 250);
+    window.addEventListener(PERFORMANCE_BENCHMARK_COMPLETE_EVENT, updateBenchmarkResult);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener(PERFORMANCE_BENCHMARK_COMPLETE_EVENT, updateBenchmarkResult);
+    };
+  }, [benchmarkMode]);
+
+  if (!benchmarkMode) return null;
+
+  return (
+    <div className="performance-benchmark-status" role="status" aria-label="性能基准进度" aria-live="polite">
+      <Gauge aria-hidden="true" className="performance-benchmark-status-icon" size={15} strokeWidth={1.9} />
+      <div>
+        <strong>{PERFORMANCE_BENCHMARK_SCENES[benchmarkMode].label}性能基准</strong>
+        <small>{effectiveProfile.label}档</small>
+      </div>
+      {benchmarkReport ? (
+        <>
+          <span>{benchmarkReport.averageFps} FPS · 1% Low {benchmarkReport.onePercentLowFps}</span>
+          <button type="button" onClick={() => downloadPerformanceBenchmarkReport(benchmarkReport)}>
+            <Download aria-hidden="true" size={13} />
+            下载匿名报告
+          </button>
+        </>
+      ) : (
+        <span>{benchmarkStatus === "sampling" ? "正在采样，约 6 秒" : "正在预热场景，约 2 秒"}</span>
+      )}
     </div>
   );
 }

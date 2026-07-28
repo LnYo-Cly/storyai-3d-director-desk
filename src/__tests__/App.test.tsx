@@ -99,16 +99,20 @@ it("keeps the reference header control path available", async () => {
   expect(useDirectorStore.getState().motionStudioOpen).toBe(false);
 });
 
-it("runs the benchmark as a temporary workspace without adding it to the director registry", () => {
-  window.history.replaceState({}, "", "/?instanceId=benchmark_test&benchmark=standard");
+it("runs the paused heavy benchmark without opening editor overlays", () => {
+  window.history.replaceState({}, "", "/?instanceId=benchmark_test&benchmark=heavy&benchmarkPlaying=paused");
 
-  render(<App />);
+  const { container } = render(<App />);
 
-  expect(screen.getByRole("option", { name: "历史压力性能基准（临时）" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "重型性能基准（临时）" })).toBeInTheDocument();
   expect(readDirectorDeskRecords().some((record) => record.id === "benchmark_test")).toBe(false);
-  expect(useDirectorStore.getState().project.objects.filter((object) => object.kind === "character")).toHaveLength(25);
-  expect(useDirectorStore.getState().motionStudioOpen).toBe(true);
-  expect(useDirectorStore.getState().cameraMotionPlaying).toBe(true);
+  expect(useDirectorStore.getState().project.objects.filter((object) => object.kind === "character")).toHaveLength(10);
+  expect(useDirectorStore.getState().project.objects.filter((object) => object.kind === "prop")).toHaveLength(50);
+  expect(useDirectorStore.getState().motionStudioOpen).toBe(false);
+  expect(useDirectorStore.getState().cameraMotionPlaying).toBe(false);
+  expect(screen.getByRole("status", { name: "性能基准进度" }).closest(".top-bar-center")).not.toBeNull();
+  expect(screen.queryByRole("button", { name: "打开运镜工作台" })).not.toBeInTheDocument();
+  expect(container.querySelector(".performance-benchmark-hud")).not.toBeInTheDocument();
 });
 
 it("notifies the host canvas when the director desk app is ready", () => {

@@ -28,7 +28,7 @@ import {
   getPerformanceBenchmarkPlayback,
 } from "./editor/performance/performanceBenchmark";
 import { getBenchmarkPerformanceProfile } from "./editor/performance/performanceProfiles";
-import { PerformanceSettings } from "./editor/performance/PerformanceSettings";
+import { PerformanceBenchmarkStatus, PerformanceSettings } from "./editor/performance/PerformanceSettings";
 
 type AppScreen = "home" | "editor";
 
@@ -230,7 +230,6 @@ export default function App() {
       const state = useDirectorStore.getState();
       const benchmarkProfile = getBenchmarkPerformanceProfile(window.location.search);
       const benchmarkPlayback = getPerformanceBenchmarkPlayback(window.location.search);
-      const benchmarkScene = getPerformanceBenchmarkSceneConfig(benchmarkMode);
       useDirectorStore.setState({
         ...state,
         project: createPerformanceBenchmarkProject(benchmarkMode),
@@ -242,7 +241,7 @@ export default function App() {
         selectedCameraKeyframeIds: [],
         selectedObjectMotionKeyframeId: null,
         showCharacterRoutes: false,
-        motionStudioOpen: benchmarkScene.monitorEnabled,
+        motionStudioOpen: false,
         cameraMotionProgress: benchmarkPlayback.progress,
         cameraMotionPlaying: benchmarkPlayback.playing,
         ...(benchmarkProfile ? { performanceProfile: benchmarkProfile } : {}),
@@ -516,41 +515,47 @@ export default function App() {
           </div>
         </div>
         <div className="top-bar-center">
-          <div className="mode-toggle ui-segmented" role="group" aria-label="视角切换">
-            <button
-              className={`mode-toggle-button ui-segmented-item ${viewMode === "director" ? "ui-segmented-item-active" : ""}`}
-              aria-pressed={viewMode === "director"}
-              type="button"
-              onClick={() => setViewMode("director")}
-            >
-              导演视角
-            </button>
-            <button
-              className={`mode-toggle-button ui-segmented-item ${viewMode === "camera" ? "ui-segmented-item-active" : ""}`}
-              aria-label="第一视角"
-              aria-pressed={viewMode === "camera"}
-              title="查看摄影机最终画面"
-              type="button"
-              onClick={() => setViewMode("camera")}
-            >
-              第一视角
-            </button>
-          </div>
-          <button
-            className={`top-bar-motion-button${motionStudioOpen ? " is-active" : ""}`}
-            type="button"
-            aria-label={motionStudioOpen ? "关闭运镜工作台" : "打开运镜工作台"}
-            aria-pressed={motionStudioOpen}
-            onClick={() => {
-              setViewMode("director");
-              setMotionStudioOpen(!motionStudioOpen);
-            }}
-          >
-            <Route aria-hidden="true" size={15} />
-            运镜
-          </button>
-          <ViewportSensitivitySettings />
-          <PerformanceSettings />
+          {benchmarkMode ? (
+            <PerformanceBenchmarkStatus />
+          ) : (
+            <>
+              <div className="mode-toggle ui-segmented" role="group" aria-label="视角切换">
+                <button
+                  className={`mode-toggle-button ui-segmented-item ${viewMode === "director" ? "ui-segmented-item-active" : ""}`}
+                  aria-pressed={viewMode === "director"}
+                  type="button"
+                  onClick={() => setViewMode("director")}
+                >
+                  导演视角
+                </button>
+                <button
+                  className={`mode-toggle-button ui-segmented-item ${viewMode === "camera" ? "ui-segmented-item-active" : ""}`}
+                  aria-label="第一视角"
+                  aria-pressed={viewMode === "camera"}
+                  title="查看摄影机最终画面"
+                  type="button"
+                  onClick={() => setViewMode("camera")}
+                >
+                  第一视角
+                </button>
+              </div>
+              <button
+                className={`top-bar-motion-button${motionStudioOpen ? " is-active" : ""}`}
+                type="button"
+                aria-label={motionStudioOpen ? "关闭运镜工作台" : "打开运镜工作台"}
+                aria-pressed={motionStudioOpen}
+                onClick={() => {
+                  setViewMode("director");
+                  setMotionStudioOpen(!motionStudioOpen);
+                }}
+              >
+                <Route aria-hidden="true" size={15} />
+                运镜
+              </button>
+              <ViewportSensitivitySettings />
+              <PerformanceSettings />
+            </>
+          )}
         </div>
         <div className="top-bar-actions">
           <button

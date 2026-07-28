@@ -815,6 +815,18 @@ it("keeps the finished-shot monitor mounted while paused for timeline scrubbing"
   expect(screen.getByRole("slider", { name: "小窗 FOV" })).toHaveValue("46");
 });
 
+it("keeps the heavy benchmark monitor renderer mounted but hides its editing surface", () => {
+  window.history.replaceState({}, "", "/?benchmark=heavy&benchmarkPlaying=paused");
+
+  const { container } = render(<App />);
+
+  const monitor = container.querySelector<HTMLElement>(".motion-monitor.is-benchmark-probe");
+  expect(monitor).not.toBeNull();
+  expect(monitor).toHaveAttribute("aria-hidden", "true");
+  expect(within(monitor as HTMLElement).getByTestId("mock-r3f-canvas")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "运镜工作台" })).not.toBeInTheDocument();
+});
+
 it("passes the active panorama to both the main viewport and finished-shot monitor", () => {
   const state = useDirectorStore.getState();
   const panoramaAsset = {

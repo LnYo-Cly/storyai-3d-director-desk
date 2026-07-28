@@ -51,7 +51,7 @@ import {
   getRuntimeCameraPlaybackSnapshot,
 } from "../runtime/cameraBodyTracking";
 import { startPerformanceBenchmarkCollection } from "../performance/PerformanceBenchmarkCollector";
-import { getPerformanceBenchmarkMode } from "../performance/performanceBenchmark";
+import { getPerformanceBenchmarkMode, getPerformanceBenchmarkSceneConfig } from "../performance/performanceBenchmark";
 import {
   PERFORMANCE_PROFILE_CONFIGS,
   getEffectivePerformanceProfile,
@@ -692,6 +692,7 @@ function MotionMonitor({
   mainViewMode,
   aspectRatio,
   finishedShotFov,
+  isBenchmarkProbe,
   monitorFov,
   onFinishedShotFovChange,
   onMonitorFovChange,
@@ -703,6 +704,7 @@ function MotionMonitor({
   mainViewMode: "director" | "camera";
   aspectRatio: number;
   finishedShotFov: number | null;
+  isBenchmarkProbe: boolean;
   monitorFov: number | null;
   onFinishedShotFovChange: (fov: number | null) => void;
   onMonitorFovChange: (fov: number | null) => void;
@@ -748,8 +750,9 @@ function MotionMonitor({
 
   return (
     <aside
-      className="motion-monitor"
+      aria-hidden={isBenchmarkProbe || undefined}
       aria-label={mainViewMode === "director" ? "成片实时监看" : "路线实时监看"}
+      className={`motion-monitor${isBenchmarkProbe ? " is-benchmark-probe" : ""}`}
       style={{ left: `${position.x}px`, top: `${position.y}px` }}
     >
       <header
@@ -928,6 +931,9 @@ function AutomaticPerformanceController({
 
 export function DirectorCanvas() {
   const benchmarkMode = getPerformanceBenchmarkMode(window.location.search);
+  const benchmarkMonitorEnabled = benchmarkMode
+    ? getPerformanceBenchmarkSceneConfig(benchmarkMode).monitorEnabled
+    : false;
   const performanceProfile = useDirectorStore((state) => state.performanceProfile);
   const detectedPerformanceProfile = getEffectivePerformanceProfile("auto").id;
   const [automaticPerformanceProfile, setAutomaticPerformanceProfile] = useState(detectedPerformanceProfile);
@@ -1485,13 +1491,14 @@ export function DirectorCanvas() {
         onLoadCameraSnapshot={(snapshot) => updateDirectorViewSnapshot(snapshot, true)}
         onStartPilot={startPilotSession}
       />
-      {motionStudioOpen && (activeCameraMotionPath?.keyframes.length ?? 0) >= 2 && !isCameraPiloting && !referenceVideoRendering ? (
+      {(motionStudioOpen || benchmarkMonitorEnabled) && (activeCameraMotionPath?.keyframes.length ?? 0) >= 2 && !isCameraPiloting && !referenceVideoRendering ? (
         <MotionMonitor
           antialias={contextPerformanceConfig.antialias}
           aspectRatio={finishedShotAspectRatio}
           cameraSnapshot={activeCameraView}
           directorSnapshot={directorViewSnapshot}
           finishedShotFov={finishedShotFov}
+          isBenchmarkProbe={benchmarkMonitorEnabled}
           mainViewMode={viewMode}
           monitorFov={motionMonitorFov}
           onFinishedShotFovChange={setFinishedShotFov}
