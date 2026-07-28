@@ -1803,6 +1803,10 @@
     padding: 4px;
   }
 
+  .app-shell .director-desk-switcher {
+    display: none;
+  }
+
   .app-shell .top-bar-actions {
     display: none;
   }

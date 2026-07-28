@@ -360,6 +360,12 @@ it("keeps the demo usable in narrower in-app browser widths", () => {
   expect(css).not.toContain("min-width: 1280px;");
 });
 
+it("hides the desktop desk switcher before the mobile header can overlap", () => {
+  const css = readStyleBundle();
+
+  expect(css).toMatch(/@media \(max-width: 600px\)\s*\{[\s\S]*?\.app-shell \.director-desk-switcher\s*\{[\s\S]*?display:\s*none;/);
+});
+
 it("reserves a non-overlapping action column in the motion workspace header", () => {
   const css = readStyleBundle();
 
