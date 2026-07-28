@@ -6,7 +6,9 @@ import { DirectorCanvas } from "./editor/canvas/DirectorCanvas";
 import { ViewportSensitivitySettings } from "./editor/canvas/ViewportSensitivitySettings";
 import {
   DIRECTOR_DESK_SESSION_OPENED_EVENT,
+  flushDirectorDeskProjectToHost,
   initDirectorDeskHostBridge,
+  isDirectorDeskCanvasEmbedded,
   postDirectorDeskMessageToHost,
 } from "./editor/io/hostBridge";
 import { useDirectorStore } from "./editor/store/directorStore";
@@ -189,6 +191,7 @@ function isEditableShortcutTarget(target: EventTarget | null) {
 
 export default function App() {
   const benchmarkMode = getPerformanceBenchmarkMode(window.location.search);
+  const canvasEmbedded = isDirectorDeskCanvasEmbedded();
   const viewMode = useDirectorStore((state) => state.viewMode);
   const setViewMode = useDirectorStore((state) => state.setViewMode);
   const motionStudioOpen = useDirectorStore((state) => state.motionStudioOpen);
@@ -282,6 +285,7 @@ export default function App() {
   }
 
   function handleClose() {
+    flushDirectorDeskProjectToHost();
     postDirectorDeskMessageToHost({ type: "storyai:director-desk-close" });
   }
 
@@ -317,7 +321,7 @@ export default function App() {
     };
   }, []);
 
-  if (screen === "home") {
+  if (screen === "home" && !canvasEmbedded) {
     return (
       <main className="director-home-shell">
         <section className="director-home-hero">
@@ -485,7 +489,8 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <header className="top-bar">
+      <header className={`top-bar${canvasEmbedded ? " is-canvas-embedded" : ""}`}>
+        {!canvasEmbedded ? (
         <div className="top-bar-left">
           <button className="top-bar-title top-bar-home-button" type="button" onClick={backToHome}>
             3D导演台
@@ -514,6 +519,7 @@ export default function App() {
             </button>
           </div>
         </div>
+        ) : null}
         <div className="top-bar-center">
           {benchmarkMode ? (
             <PerformanceBenchmarkStatus />

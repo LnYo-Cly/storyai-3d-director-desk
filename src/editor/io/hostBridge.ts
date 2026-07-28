@@ -19,7 +19,11 @@ import {
 } from "./extensionProtocol";
 import { requestCleanFrameExport } from "./cleanFrameExport";
 import { requestReferenceVideoExport } from "./referenceVideoExport";
-import { getDirectorProjectFingerprint } from "./projectDocument";
+import {
+  createDirectorProjectDocument,
+  getDirectorProjectFingerprint,
+  parseDirectorProjectDocument,
+} from "./projectDocument";
 import { listDirectorPluginResults, submitDirectorPluginResult } from "./pluginResultRegistry";
 import {
   initTauriDirectorHostTransport,
@@ -38,6 +42,7 @@ interface HostSessionPayload {
   instanceId?: unknown;
   theme?: unknown;
   route?: unknown;
+  project?: unknown;
 }
 
 interface HostRoutePayload {
@@ -53,14 +58,38 @@ export interface HostCaptureBatchPayload {
   captures?: HostCaptureItemPayload[];
 }
 
+export interface DirectorDeskReferenceVideoPayload {
+  exportId: string;
+  video: Blob;
+  fileName: string;
+  mimeType: string;
+  durationMs: number;
+  fps: number;
+  width: number;
+  height: number;
+  cameraPath: Array<{ fov: number; position: number[]; target: number[] }>;
+}
+
+export interface DirectorDeskExportStatus {
+  exportId: string;
+  ok: boolean;
+  message: string;
+}
+
 let initialized = false;
 let activeExtensionExportRequestId: string | null = null;
 let clearTauriTransport: (() => void) | null = null;
 let hostedRoute: DirectorMotionRoute | null = null;
 let hostedRouteCharacterId: string | null = null;
 let removeMotionRouteUnsubscribe: (() => void) | null = null;
+let removeProjectUnsubscribe: (() => void) | null = null;
 let suppressNextMotionRouteNotice = false;
+let suppressNextProjectNotice = false;
+let hostedInstanceId: string | null = null;
+let hostedProjectFingerprint = "";
+let projectSyncTimer: ReturnType<typeof window.setTimeout> | null = null;
 export const DIRECTOR_DESK_SESSION_OPENED_EVENT = "storyai:director-desk-session-opened";
+export const DIRECTOR_DESK_EXPORT_STATUS_EVENT = "storyai:director-desk-export-status";
 
 function normalizeString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -108,6 +137,14 @@ function getInitialHostTheme() {
     return normalizeTheme(new URLSearchParams(window.location.search).get("theme"));
   } catch {
     return null;
+  }
+}
+
+export function isDirectorDeskCanvasEmbedded() {
+  try {
+    return new URLSearchParams(window.location.search).get("embed") === "canvas";
+  } catch {
+    return false;
   }
 }
 
@@ -287,6 +324,59 @@ function subscribeToMotionRouteUpdates() {
   });
 }
 
+function postProjectToHost(force = false) {
+  if (!isDirectorDeskCanvasEmbedded() || !hostedInstanceId) return;
+
+  const project = useDirectorStore.getState().project;
+  const fingerprint = getDirectorProjectFingerprint(project);
+  if (!force && fingerprint === hostedProjectFingerprint) return;
+
+  hostedProjectFingerprint = fingerprint;
+  postDirectorDeskMessageToHost({
+    type: "storyai:director-desk-project-synced",
+    payload: {
+      instanceId: hostedInstanceId,
+      project: createDirectorProjectDocument(project),
+    },
+  });
+}
+
+function scheduleProjectSyncToHost() {
+  if (!isDirectorDeskCanvasEmbedded() || !hostedInstanceId || suppressNextProjectNotice) return;
+  if (projectSyncTimer !== null) window.clearTimeout(projectSyncTimer);
+  projectSyncTimer = window.setTimeout(() => {
+    projectSyncTimer = null;
+    postProjectToHost();
+  }, 250);
+}
+
+function subscribeToProjectUpdates() {
+  if (removeProjectUnsubscribe) return;
+
+  removeProjectUnsubscribe = useDirectorStore.subscribe((state, previousState) => {
+    if (state.project === previousState.project) return;
+    if (suppressNextProjectNotice) return;
+    scheduleProjectSyncToHost();
+  });
+}
+
+export function flushDirectorDeskProjectToHost() {
+  if (projectSyncTimer !== null) {
+    window.clearTimeout(projectSyncTimer);
+    projectSyncTimer = null;
+  }
+  postProjectToHost();
+}
+
+function readHostProject(value: unknown): DirectorProject | null {
+  if (value === null || value === undefined) return null;
+  try {
+    return parseDirectorProjectDocument(value);
+  } catch {
+    return null;
+  }
+}
+
 function isSupportedHostImageUrl(value: string) {
   if (value.startsWith("data:image/")) {
     return true;
@@ -326,8 +416,15 @@ function openHostSession(payload: HostSessionPayload) {
   }
   if (instanceId) {
     suppressNextMotionRouteNotice = true;
+    suppressNextProjectNotice = true;
+    hostedInstanceId = instanceId;
     const state = useDirectorStore.getState();
     state.openScopedScene(instanceId);
+    const hostProjectWasProvided = payload.project !== null && payload.project !== undefined;
+    const hostProject = readHostProject(payload.project);
+    if (hostProject) {
+      state.replaceProject(hostProject);
+    }
     if (Object.prototype.hasOwnProperty.call(payload, "route")) {
       applyHostedMotionRoute(normalizeMotionRoute(payload.route, useDirectorStore.getState().project));
     } else {
@@ -335,8 +432,13 @@ function openHostSession(payload: HostSessionPayload) {
       hostedRouteCharacterId = null;
     }
     suppressNextMotionRouteNotice = false;
+    suppressNextProjectNotice = false;
+    hostedProjectFingerprint = getDirectorProjectFingerprint(useDirectorStore.getState().project);
     window.dispatchEvent(new CustomEvent(DIRECTOR_DESK_SESSION_OPENED_EVENT, { detail: { instanceId } }));
     postMotionRouteToHost(getHostedMotionRoute());
+    if (!hostProject && !hostProjectWasProvided) {
+      postProjectToHost(true);
+    }
   }
 }
 
@@ -344,14 +446,53 @@ function applyHostMotionRoute(payload: HostRoutePayload) {
   if (!Object.prototype.hasOwnProperty.call(payload, "route")) return;
 
   suppressNextMotionRouteNotice = true;
+  suppressNextProjectNotice = true;
   applyHostedMotionRoute(normalizeMotionRoute(payload.route, useDirectorStore.getState().project));
   suppressNextMotionRouteNotice = false;
+  suppressNextProjectNotice = false;
+  hostedProjectFingerprint = getDirectorProjectFingerprint(useDirectorStore.getState().project);
   postMotionRouteToHost(getHostedMotionRoute());
 }
 
 export function postDirectorDeskMessageToHost(message: DirectorDeskTransportMessage) {
   if (postTauriDirectorHostMessage(message)) return;
   window.parent?.postMessage(message, getDirectorDeskHostOrigin());
+}
+
+export function createDirectorDeskExportId() {
+  const randomId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `director-export-${randomId}`;
+}
+
+export function postDirectorDeskReferenceVideoToHost(payload: DirectorDeskReferenceVideoPayload) {
+  const exportId = normalizeString(payload.exportId);
+  if (!exportId || !(payload.video instanceof Blob) || payload.video.size === 0) return;
+
+  postDirectorDeskMessageToHost({
+    type: "storyai:director-desk-reference-video-sent",
+    payload: {
+      ...payload,
+      exportId,
+    },
+  });
+}
+
+function dispatchDirectorDeskExportStatus(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+  const value = payload as Partial<DirectorDeskExportStatus>;
+  const exportId = normalizeString(value.exportId);
+  const message = normalizeString(value.message);
+  if (!exportId || typeof value.ok !== "boolean") return;
+
+  window.dispatchEvent(new CustomEvent<DirectorDeskExportStatus>(DIRECTOR_DESK_EXPORT_STATUS_EVENT, {
+    detail: {
+      exportId,
+      ok: value.ok,
+      message: message || (value.ok ? "已保存到画布" : "保存失败"),
+    },
+  }));
 }
 
 function postDirectorExtensionResponse(payload: DirectorExtensionResponsePayload) {
@@ -514,6 +655,11 @@ function handleHostProtocolMessage(message: DirectorDeskTransportMessage) {
     return;
   }
 
+  if (message.type === "storyai:director-desk-export-status") {
+    dispatchDirectorDeskExportStatus(message.payload);
+    return;
+  }
+
   if (message.type === DIRECTOR_EXTENSION_REQUEST_TYPE) {
     void handleDirectorExtensionRequest(message.payload);
   }
@@ -534,6 +680,7 @@ export function initDirectorDeskHostBridge() {
   applyDirectorDeskTheme(getInitialHostTheme() ?? "dark");
   window.addEventListener("message", handleHostMessage);
   subscribeToMotionRouteUpdates();
+  subscribeToProjectUpdates();
   void initTauriDirectorHostTransport(handleHostProtocolMessage).then((cleanup) => {
     if (!cleanup) return;
     if (!initialized) {
@@ -554,9 +701,18 @@ export function clearDirectorDeskHostBridge() {
   hostedRoute = null;
   hostedRouteCharacterId = null;
   suppressNextMotionRouteNotice = false;
+  suppressNextProjectNotice = false;
+  hostedInstanceId = null;
+  hostedProjectFingerprint = "";
+  if (projectSyncTimer !== null) {
+    window.clearTimeout(projectSyncTimer);
+    projectSyncTimer = null;
+  }
   window.removeEventListener("message", handleHostMessage);
   removeMotionRouteUnsubscribe?.();
   removeMotionRouteUnsubscribe = null;
+  removeProjectUnsubscribe?.();
+  removeProjectUnsubscribe = null;
   clearTauriTransport?.();
   clearTauriTransport = null;
 }

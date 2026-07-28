@@ -24,6 +24,13 @@ import {
   requestReferenceVideoExport,
   type ReferenceVideoExportQuality,
 } from "../io/referenceVideoExport";
+import {
+  DIRECTOR_DESK_EXPORT_STATUS_EVENT,
+  createDirectorDeskExportId,
+  isDirectorDeskCanvasEmbedded,
+  postDirectorDeskReferenceVideoToHost,
+  type DirectorDeskExportStatus,
+} from "../io/hostBridge";
 import { getCameraMotionPath, getCameraMotionTimingPlan, getCameraMotionTimingSample } from "../schema/cameraMotion";
 import {
   getAnimatedCameraFocusTarget,
@@ -49,6 +56,7 @@ import {
   type DirectorCameraTargetBodyPart,
   type DirectorCameraTargetFollowMode,
 } from "../schema/semanticBody";
+import { isEditablePilotEventTarget } from "./pilotControls";
 import { RouteCustomEasingControl } from "./RouteCustomEasingControl";
 
 export function getActiveCameraWaypointIndex(progress: number, times: number[]) {
@@ -70,12 +78,14 @@ export function MotionStudio({
   onLoadCameraSnapshot?: (snapshot: CameraShotSnapshot) => void;
   onStartPilot?: (editKeyframeId?: string | null) => void;
 }) {
+  const motionStudioRef = useRef<HTMLElement | null>(null);
   const open = useDirectorStore((state) => state.motionStudioOpen);
   const viewMode = useDirectorStore((state) => state.viewMode);
   const cameraPilotMode = useDirectorStore((state) => state.cameraPilotMode);
   const activeCamera = useDirectorStore((state) =>
     state.project.cameras.find((item) => item.id === state.project.activeCameraId) ?? state.project.cameras[0]
   );
+  const activeCameraId = activeCamera?.id;
   const selectedCameraKeyframeId = useDirectorStore((state) => state.selectedCameraKeyframeId);
   const selectedCameraKeyframeIds = useDirectorStore((state) => state.selectedCameraKeyframeIds);
   const cameraMotionProgress = useDirectorStore((state) => state.cameraMotionProgress);
@@ -116,11 +126,50 @@ export function MotionStudio({
     targetObjectId: string;
     templateId: CameraPathTemplateId;
   } | null>(null);
+  const pendingHostExportIdsRef = useRef(new Set<string>());
+  const canvasEmbedded = isDirectorDeskCanvasEmbedded();
+
+  useEffect(() => {
+    function handleHostExportStatus(event: Event) {
+      const status = (event as CustomEvent<DirectorDeskExportStatus>).detail;
+      if (!status || !pendingHostExportIdsRef.current.delete(status.exportId)) return;
+      setExportStatus(status.message);
+    }
+
+    window.addEventListener(DIRECTOR_DESK_EXPORT_STATUS_EVENT, handleHostExportStatus);
+    return () => window.removeEventListener(DIRECTOR_DESK_EXPORT_STATUS_EVENT, handleHostExportStatus);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     ensureMotionCamera(getViewportCameraSnapshot());
   }, [ensureMotionCamera, open]);
+
+  useEffect(() => {
+    if (open) motionStudioRef.current?.focus({ preventScroll: true });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || cameraPilotMode !== "idle" || !activeCameraId) return;
+
+    function recordCurrentViewWithEnter(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented
+        || event.repeat
+        || event.isComposing
+        || (event.code !== "Enter" && event.code !== "NumpadEnter")
+        || isEditablePilotEventTarget(event.target)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      recordCameraMotionSnapshot(activeCameraId, getViewportCameraSnapshot());
+    }
+
+    window.addEventListener("keydown", recordCurrentViewWithEnter, true);
+    return () => window.removeEventListener("keydown", recordCurrentViewWithEnter, true);
+  }, [activeCameraId, cameraPilotMode, getViewportCameraSnapshot, open, recordCameraMotionSnapshot]);
 
   useEffect(() => {
     if (selectedObjectId && sceneObjects.some((object) => object.id === selectedObjectId && isCameraFocusableObject(object))) {
@@ -399,8 +448,29 @@ export function MotionStudio({
         fps: exportFps,
         quality: exportQuality,
       });
-      downloadReferenceVideo(result);
-      setExportStatus("MP4 参考视频已下载");
+      if (canvasEmbedded) {
+        const exportId = createDirectorDeskExportId();
+        pendingHostExportIdsRef.current.add(exportId);
+        postDirectorDeskReferenceVideoToHost({
+          exportId,
+          video: result.blob,
+          fileName: result.fileName,
+          mimeType: result.mimeType,
+          durationMs: Math.round(result.durationSeconds * 1000),
+          fps: exportFps,
+          width: result.width,
+          height: result.height,
+          cameraPath: motionPath.keyframes.map((keyframe) => ({
+            fov: keyframe.fov,
+            position: [...keyframe.position],
+            target: [...keyframe.target],
+          })),
+        });
+        setExportStatus("正在通过画布保存参考视频...");
+      } else {
+        downloadReferenceVideo(result);
+        setExportStatus("MP4 参考视频已下载");
+      }
     } catch (error) {
       setExportStatus(error instanceof Error ? error.message : "参考视频导出失败");
     } finally {
@@ -409,7 +479,7 @@ export function MotionStudio({
   }
 
   return (
-    <section className={`motion-studio${cameraPilotMode !== "idle" ? " is-piloting" : ""}`} aria-label="运镜工作台">
+    <section ref={motionStudioRef} tabIndex={-1} className={`motion-studio${cameraPilotMode !== "idle" ? " is-piloting" : ""}`} aria-label="运镜工作台">
       <header className="motion-studio-header">
         <div className="motion-studio-heading">
           <span className="motion-studio-icon"><Route aria-hidden="true" size={17} /></span>

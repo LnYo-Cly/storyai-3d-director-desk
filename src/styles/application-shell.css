@@ -1280,6 +1280,14 @@
   pointer-events: none;
 }
 
+.app-shell .top-bar.is-canvas-embedded .top-bar-center {
+  grid-column: 2;
+}
+
+.app-shell .top-bar.is-canvas-embedded .top-bar-actions {
+  grid-column: 3;
+}
+
 .app-shell .top-bar-left,
 .app-shell .top-bar-center,
 .app-shell .top-bar-actions {
@@ -1767,6 +1775,10 @@
 }
 
 @media (max-width: 920px) {
+  .app-shell .top-bar.is-canvas-embedded {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
   .app-shell {
     --left-sidebar-width: min(218px, 29vw);
   }
@@ -1789,6 +1801,25 @@
 }
 
 @media (max-width: 600px) {
+  .app-shell .top-bar.is-canvas-embedded {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .app-shell .top-bar.is-canvas-embedded .top-bar-center {
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .app-shell .top-bar.is-canvas-embedded .top-bar-actions {
+    display: flex;
+    grid-column: 2;
+  }
+
+  .app-shell .top-bar.is-canvas-embedded .viewport-sensitivity-trigger,
+  .app-shell .top-bar.is-canvas-embedded .performance-settings-trigger {
+    display: none;
+  }
+
   .app-shell .top-bar {
     top: 8px;
     right: 8px;

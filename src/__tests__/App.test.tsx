@@ -84,6 +84,20 @@ it("renders the director desk header and view mode switch", () => {
   expect(screen.getByLabelText("关闭")).toBeInTheDocument();
 });
 
+it("removes standalone navigation when embedded by the canvas", () => {
+  window.history.replaceState({}, "", "/?instanceId=node_director_canvas&embed=canvas");
+
+  const { container } = render(<App />);
+
+  expect(container.querySelector(".top-bar.is-canvas-embedded")).toBeInTheDocument();
+  expect(screen.queryByLabelText("当前版本 v0.3.1")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "返回首页" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "选择导演台" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "新建" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "导演视角" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
+});
+
 it("keeps the reference header control path available", async () => {
   const user = userEvent.setup();
   render(<App />);

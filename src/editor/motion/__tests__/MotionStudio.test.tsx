@@ -32,6 +32,33 @@ it("presents a beginner-friendly shooting workflow with the final key bindings",
   expect(screen.getByRole("button", { name: "锁定后只保持看向主体" })).toHaveAttribute("aria-pressed", "true");
 });
 
+it("records the current view when Enter is pressed outside pilot mode", () => {
+  render(<MotionStudio getViewportCameraSnapshot={() => ({ position: [3, 2, 7], target: [0, 1, 0], fov: 46 })} />);
+
+  fireEvent.keyDown(window, { code: "Enter" });
+
+  expect(useDirectorStore.getState().project.cameras[0]?.motionPath?.keyframes).toHaveLength(1);
+  expect(useDirectorStore.getState().project.cameras[0]?.motionPath?.keyframes[0]).toMatchObject({
+    position: [3, 2, 7],
+    target: [0, 1, 0],
+    fov: 46,
+  });
+});
+
+it("moves focus into the opened workspace so Enter does not reactivate the opener", () => {
+  const opener = document.createElement("button");
+  document.body.append(opener);
+  opener.focus();
+
+  render(<MotionStudio getViewportCameraSnapshot={() => ({ position: [3, 2, 7], target: [0, 1, 0], fov: 46 })} />);
+
+  const workspace = screen.getByRole("region", { name: "运镜工作台" });
+  expect(workspace).toHaveFocus();
+  fireEvent.keyDown(workspace, { code: "Enter" });
+  expect(useDirectorStore.getState().project.cameras[0]?.motionPath?.keyframes).toHaveLength(1);
+  opener.remove();
+});
+
 it("plays the completed move from the camera first-person view", async () => {
   const user = userEvent.setup();
   useDirectorStore.getState().recordCameraMotionSnapshot("cam_1", {

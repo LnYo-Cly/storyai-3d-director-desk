@@ -11,7 +11,7 @@ import { DIRECTOR_EXTENSION_REQUEST_TYPE, DIRECTOR_EXTENSION_RESPONSE_TYPE } fro
 import { clearCleanFrameExportHandler, setCleanFrameExportHandler } from "../cleanFrameExport";
 import { clearReferenceVideoExportHandler, setReferenceVideoExportHandler } from "../referenceVideoExport";
 import { clearDirectorPluginResults } from "../pluginResultRegistry";
-import { getDirectorProjectFingerprint } from "../projectDocument";
+import { createDirectorProjectDocument, getDirectorProjectFingerprint } from "../projectDocument";
 
 function createMemoryStorage(): Storage {
   const storage = new Map<string, string>();
@@ -48,6 +48,7 @@ afterEach(() => {
   clearCleanFrameExportHandler();
   clearReferenceVideoExportHandler();
   clearDirectorPluginResults();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -276,6 +277,79 @@ it("switches director store persistence when the host sends a card session", () 
   );
 
   expect(useDirectorStore.getState().project.scene.backgroundColor).toBe("#151515");
+});
+
+it("restores the host-owned project and syncs later editor changes back to the canvas", () => {
+  window.history.replaceState({}, "", "/?instanceId=node_director_canvas&embed=canvas");
+  vi.useFakeTimers();
+  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+  const hostProject = createInitialDirectorState().project;
+  hostProject.scene.backgroundColor = "#283142";
+
+  initDirectorDeskHostBridge();
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "storyai:director-desk-session",
+        payload: {
+          instanceId: "node_director_canvas",
+          project: createDirectorProjectDocument(hostProject),
+        },
+      },
+      origin: window.location.origin,
+    })
+  );
+
+  expect(useDirectorStore.getState().project.scene.backgroundColor).toBe("#283142");
+
+  postMessage.mockClear();
+  useDirectorStore.getState().updateScene({ backgroundColor: "#3c4659" });
+  vi.advanceTimersByTime(250);
+
+  expect(postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "storyai:director-desk-project-synced",
+      payload: expect.objectContaining({
+        instanceId: "node_director_canvas",
+        project: expect.objectContaining({
+          format: "3d-director-desk-project",
+          project: expect.objectContaining({ scene: expect.objectContaining({ backgroundColor: "#3c4659" }) }),
+        }),
+      }),
+    }),
+    window.location.origin
+  );
+
+  vi.useRealTimers();
+});
+
+it("does not overwrite a malformed host project with the local scoped project", () => {
+  window.history.replaceState({}, "", "/?instanceId=node_director_invalid&embed=canvas");
+  const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+  initDirectorDeskHostBridge();
+
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: "storyai:director-desk-session",
+        payload: {
+          instanceId: "node_director_invalid",
+          project: {
+            format: "3d-director-desk-project",
+            schemaVersion: 1,
+            exportedAt: "2026-07-29T00:00:00.000Z",
+            project: { version: 1, scene: {}, assets: [], objects: [], cameras: "invalid" },
+          },
+        },
+      },
+      origin: window.location.origin,
+    })
+  );
+
+  expect(postMessage).not.toHaveBeenCalledWith(
+    expect.objectContaining({ type: "storyai:director-desk-project-synced" }),
+    window.location.origin
+  );
 });
 
 it("applies the light theme sent by the host session to the director desk document", () => {
