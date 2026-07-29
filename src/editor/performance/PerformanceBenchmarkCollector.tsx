@@ -29,7 +29,8 @@ const EMPTY_PEAK: RendererPeak = {
 export function startPerformanceBenchmarkCollection(
   gl: WebGLRenderer,
   mode: PerformanceBenchmarkMode,
-  performanceProfile: EffectivePerformanceProfileId
+  performanceProfile: EffectivePerformanceProfileId,
+  pathCollisionEnabled: boolean
 ) {
   const sceneConfig = getPerformanceBenchmarkSceneConfig(mode);
   const frameIntervals: number[] = [];
@@ -92,6 +93,7 @@ export function startPerformanceBenchmarkCollection(
             props: sceneConfig.propCount,
             monitorEnabled: sceneConfig.monitorEnabled,
             panoramaEnabled: sceneConfig.panoramaEnabled,
+            pathCollisionEnabled,
           },
           viewport: {
             cssHeight: canvas.clientHeight,

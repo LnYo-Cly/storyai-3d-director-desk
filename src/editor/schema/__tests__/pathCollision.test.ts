@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createInitialDirectorState } from "../../store/directorStore";
-import type { DirectorObject } from "../directorProject";
+import { getCameraPlaybackSnapshot } from "../cameraPlayback";
+import { getObjectMotionSnapshot } from "../objectMotion";
+import type { DirectorCameraShot, DirectorObject } from "../directorProject";
 import { constrainCameraPosition, constrainObjectMotionTransform } from "../pathCollision";
 
 function createFixture() {
@@ -42,6 +44,14 @@ describe("path collision", () => {
     expect(Math.abs(result.position[0]) > 1.1 || Math.abs(result.position[2]) > 1.1).toBe(true);
   });
 
+  it("does not rescan static props when collision is enabled", () => {
+    const { character, obstacle, scene } = createFixture();
+    const collisionScene = { ...scene, pathCollisionEnabled: true };
+
+    expect(constrainObjectMotionTransform(obstacle, obstacle.transform, collisionScene, [character, obstacle]))
+      .toBe(obstacle.transform);
+  });
+
   it("keeps the camera above ground and outside obstacles", () => {
     const { obstacle, scene } = createFixture();
     const collisionScene = { ...scene, groundHeight: 0, pathCollisionEnabled: true };
@@ -52,5 +62,58 @@ describe("path collision", () => {
     expect(belowGround[1]).toBeGreaterThanOrEqual(0.18);
     expect(insideObstacle[1]).toBeGreaterThanOrEqual(0.18);
     expect(Math.abs(insideObstacle[0]) > 1.1 || Math.abs(insideObstacle[2]) > 1.1 || insideObstacle[1] > 2).toBe(true);
+  });
+
+  it("keeps every sampled actor and camera playback point outside a static obstacle", () => {
+    const { character, obstacle, scene } = createFixture();
+    const collisionScene = { ...scene, groundHeight: 1.25, pathCollisionEnabled: true };
+    const movingCharacter: DirectorObject = {
+      ...character,
+      motionPath: {
+        interpolation: "linear",
+        keyframes: [
+          { id: "route_start", time: 0, transform: { ...character.transform, position: [-3, 4, 0] } },
+          { id: "route_end", time: 1, transform: { ...character.transform, position: [3, 4, 0] } },
+        ],
+      },
+    };
+    const camera: DirectorCameraShot = {
+      id: "collision_camera",
+      name: "穿越障碍的机位",
+      fov: 50,
+      transform: { position: [-3, -2, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+      targetMode: "manual",
+      target: [0, 1.25, 0],
+      motionPath: {
+        duration: 4,
+        loop: false,
+        interpolation: "linear",
+        easing: "linear",
+        keyframes: [
+          { id: "camera_start", time: 0, position: [-3, -2, 0], target: [0, 1.25, 0], fov: 50 },
+          { id: "camera_end", time: 1, position: [3, 0.5, 0], target: [0, 1.25, 0], fov: 50 },
+        ],
+      },
+    };
+
+    for (let sample = 0; sample <= 10; sample += 1) {
+      const progress = sample / 10;
+      const actor = constrainObjectMotionTransform(
+        movingCharacter,
+        getObjectMotionSnapshot(movingCharacter, progress, 4),
+        collisionScene,
+        [movingCharacter, obstacle]
+      );
+      const playback = getCameraPlaybackSnapshot(camera, [movingCharacter, obstacle], progress, collisionScene);
+
+      expect(actor.position[1]).toBe(1.25);
+      expect(Math.abs(actor.position[0]) >= 1.42 || Math.abs(actor.position[2]) >= 1.42).toBe(true);
+      expect(playback.position[1]).toBeGreaterThanOrEqual(1.43);
+      expect(
+        Math.abs(playback.position[0]) >= 1.28 ||
+        Math.abs(playback.position[2]) >= 1.28 ||
+        playback.position[1] >= 2.58
+      ).toBe(true);
+    }
   });
 });

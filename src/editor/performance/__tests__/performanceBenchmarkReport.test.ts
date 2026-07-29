@@ -35,7 +35,7 @@ const report: DirectorBenchmarkReport = {
     webglRenderer: "Apple M5 Pro",
   },
   renderer: { calls: 20, geometries: 15, textures: 4, triangles: 20_000 },
-  scene: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false },
+  scene: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false, pathCollisionEnabled: true },
   viewport: { cssHeight: 720, cssWidth: 1280, pixelHeight: 720, pixelWidth: 1280 },
 };
 
@@ -59,7 +59,7 @@ describe("performance benchmark report", () => {
       operatingSystem: "macOS",
       gpu: "Apple M5 Pro",
       threads: 16,
-      sceneScale: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false },
+      sceneScale: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false, pathCollisionEnabled: true },
       canvas: { cssHeight: 720, cssWidth: 1280, pixelHeight: 720, pixelWidth: 1280 },
     });
     expect(serialized).not.toContain("私人导演台");

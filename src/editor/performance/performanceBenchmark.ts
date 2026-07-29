@@ -64,6 +64,7 @@ export interface DirectorBenchmarkReport extends PerformanceBenchmarkSummary {
     props: number;
     monitorEnabled: boolean;
     panoramaEnabled: boolean;
+    pathCollisionEnabled: boolean;
   };
   viewport: {
     cssHeight: number;
@@ -143,6 +144,14 @@ export function getPerformanceBenchmarkPlayback(search: string) {
     };
   } catch {
     return { playing: true, progress: 0 };
+  }
+}
+
+export function getPerformanceBenchmarkPathCollisionEnabled(search: string) {
+  try {
+    return new URLSearchParams(search).get("pathCollision") === "on";
+  } catch {
+    return false;
   }
 }
 
@@ -238,7 +247,10 @@ export function getPerformanceBenchmarkSceneConfig(mode: PerformanceBenchmarkMod
   return PERFORMANCE_BENCHMARK_SCENES[mode];
 }
 
-export function createPerformanceBenchmarkProject(mode: PerformanceBenchmarkMode): DirectorProject {
+export function createPerformanceBenchmarkProject(
+  mode: PerformanceBenchmarkMode,
+  pathCollisionEnabled = false
+): DirectorProject {
   const config = getPerformanceBenchmarkSceneConfig(mode);
   const project = createDefaultDirectorProject();
   const camera = project.cameras[0];
@@ -263,6 +275,7 @@ export function createPerformanceBenchmarkProject(mode: PerformanceBenchmarkMode
       showGround: true,
       groundMaterialPreset: "studio",
       groundTextureScale: 1,
+      pathCollisionEnabled,
     },
     assets: panoramaAsset ? [panoramaAsset] : [],
     panoramaAssetId: panoramaAsset?.id ?? null,

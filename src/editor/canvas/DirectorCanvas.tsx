@@ -1418,7 +1418,12 @@ export function DirectorCanvas() {
             setDirectorViewSnapshot(viewportCameraSnapshotRef.current);
             if (benchmarkMode) {
               benchmarkCleanupRef.current?.();
-              benchmarkCleanupRef.current = startPerformanceBenchmarkCollection(gl, benchmarkMode, performanceConfig.id);
+              benchmarkCleanupRef.current = startPerformanceBenchmarkCollection(
+                gl,
+                benchmarkMode,
+                performanceConfig.id,
+                sceneSettings.pathCollisionEnabled
+              );
             }
           }}
         >

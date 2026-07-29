@@ -4,6 +4,7 @@ import {
   STANDARD_BENCHMARK_PROP_COUNT,
   PERFORMANCE_BENCHMARK_SCENES,
   createPerformanceBenchmarkProject,
+  getPerformanceBenchmarkPathCollisionEnabled,
   createStandardBenchmarkProject,
   getPerformanceBenchmarkPlayback,
   getPerformanceBenchmarkMode,
@@ -18,6 +19,12 @@ describe("performance benchmark", () => {
     expect(getPerformanceBenchmarkMode("?benchmark=heavy")).toBe("heavy");
     expect(getPerformanceBenchmarkMode("?benchmark=other")).toBeNull();
     expect(getPerformanceBenchmarkMode("")).toBeNull();
+  });
+
+  it("enables collision only for the explicit benchmark URL switch", () => {
+    expect(getPerformanceBenchmarkPathCollisionEnabled("?benchmark=heavy&pathCollision=on")).toBe(true);
+    expect(getPerformanceBenchmarkPathCollisionEnabled("?benchmark=heavy&pathCollision=off")).toBe(false);
+    expect(getPerformanceBenchmarkPathCollisionEnabled("?benchmark=heavy")).toBe(false);
   });
 
   it("builds the agreed light, medium, and heavy scene sizes", () => {
@@ -68,6 +75,11 @@ describe("performance benchmark", () => {
     expect(characters.every((character) => character.motionPath?.keyframes.length === 2)).toBe(true);
     expect(project.cameras[0]?.motionPath?.keyframes).toHaveLength(3);
     expect(project.cameras[0]?.motionPath?.loop).toBe(true);
+  });
+
+  it("keeps collision mode in the benchmark scene instead of mutating a saved desk", () => {
+    expect(createPerformanceBenchmarkProject("medium").scene.pathCollisionEnabled).toBe(false);
+    expect(createPerformanceBenchmarkProject("medium", true).scene.pathCollisionEnabled).toBe(true);
   });
 
   it("summarizes real frame intervals with stable percentiles", () => {

@@ -94,7 +94,7 @@ it("renders benchmark progress inline instead of as a floating HUD", () => {
     devicePixelRatio: 1,
     system: { browser: "Chrome 140", hardwareConcurrency: 16, platform: "Win32", webglRenderer: "RTX 3060" },
     renderer: { calls: 20, geometries: 15, textures: 4, triangles: 20_000 },
-    scene: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false },
+    scene: { characters: 5, props: 20, monitorEnabled: true, panoramaEnabled: false, pathCollisionEnabled: false },
     viewport: { cssHeight: 720, cssWidth: 1280, pixelHeight: 720, pixelWidth: 1280 },
   };
 

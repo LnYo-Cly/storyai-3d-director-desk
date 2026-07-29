@@ -65,7 +65,9 @@ export function constrainObjectMotionTransform(
   scene: SceneSettings,
   objects: DirectorObject[]
 ): DirectorTransform {
-  if (!scene.pathCollisionEnabled) return transform;
+  if (!scene.pathCollisionEnabled || (object.kind !== "character" && !object.motionPath?.keyframes.length)) {
+    return transform;
+  }
   let position = [...transform.position] as [number, number, number];
   if (object.kind === "character") position[1] = scene.groundHeight;
   for (const obstacle of getObstacles(objects).filter((item) => item.id !== object.id)) {

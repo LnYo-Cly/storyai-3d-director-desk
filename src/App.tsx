@@ -26,6 +26,7 @@ import {
 import {
   createPerformanceBenchmarkProject,
   getPerformanceBenchmarkSceneConfig,
+  getPerformanceBenchmarkPathCollisionEnabled,
   getPerformanceBenchmarkMode,
   getPerformanceBenchmarkPlayback,
 } from "./editor/performance/performanceBenchmark";
@@ -233,9 +234,10 @@ export default function App() {
       const state = useDirectorStore.getState();
       const benchmarkProfile = getBenchmarkPerformanceProfile(window.location.search);
       const benchmarkPlayback = getPerformanceBenchmarkPlayback(window.location.search);
+      const pathCollisionEnabled = getPerformanceBenchmarkPathCollisionEnabled(window.location.search);
       useDirectorStore.setState({
         ...state,
-        project: createPerformanceBenchmarkProject(benchmarkMode),
+        project: createPerformanceBenchmarkProject(benchmarkMode, pathCollisionEnabled),
         viewMode: "director",
         selectedObjectId: null,
         selectedObjectIds: [],

@@ -32,6 +32,7 @@ export interface PublicPerformanceBenchmarkReport {
     props: number;
     monitorEnabled: boolean;
     panoramaEnabled: boolean;
+    pathCollisionEnabled: boolean;
   };
   canvas: DirectorBenchmarkReport["viewport"];
 }
@@ -91,6 +92,7 @@ export function buildPublicPerformanceBenchmarkReport(
       props: report.scene.props,
       monitorEnabled: report.scene.monitorEnabled,
       panoramaEnabled: report.scene.panoramaEnabled,
+      pathCollisionEnabled: report.scene.pathCollisionEnabled,
     },
     canvas: { ...report.viewport },
   };
